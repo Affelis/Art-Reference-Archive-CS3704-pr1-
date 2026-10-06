@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Art Reference Archive</title>
+  <style>
+    legend {
+      text-align: center;
+    }
+  </style>
+</head>
+<body style="font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 0 15px; background-color: #f8f9fa;">
+
+  <h1 style="text-align: center;">Art Reference Archive</h1>
+
+  <!-- UPLOAD SECTION -->
+  <fieldset style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 6px;">
+    <legend><strong>Upload Picture</strong></legend>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+      <input type="file" id="fileInput" accept="image/*">
+      <input type="text" id="tagInput" placeholder="Tags (e.g. nature, forest, tree)" style="flex: 1; padding: 6px;">
+      <button onclick="uploadPicture()" style="padding: 6px 16px; cursor: pointer;">Upload</button>
+    </div>
+  </fieldset>
+
+  <!-- RANDOM PICTURE SECTION -->
+  <fieldset style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 6px; text-align: center;">
+    <legend><strong>Random Picture Viewer</strong></legend>
+    <div style="display: flex; gap: 10px; margin-bottom: 15px; justify-content: center;">
+      <input type="text" id="randomTags" placeholder="Filter tags (e.g. nature, forest)" style="width: 60%; padding: 6px;">
+      <button onclick="getRandomPicture()" style="padding: 6px 16px; cursor: pointer;">Give Me Random Picture</button>
+    </div>
+    
+    <div id="randomViewerContainer">
+      <p id="randomPlaceholder">Click "Give Me Random Picture" to load an image.</p>
+      <img id="randomImage" src="" alt="Random Reference" style="max-width: 100%; max-height: 500px; display: none; margin: 0 auto; border-radius: 4px;">
+      <p id="randomImageTags" style="font-weight: bold; margin-top: 10px;"></p>
+      <button id="deleteRandomBtn" style="display: none; padding: 6px 16px; cursor: pointer;" onclick="deleteRandomPicture()">Delete This Picture</button>
+    </div>
+  </fieldset>
+
+  <!-- TIMER SLIDESHOW SECTION -->
+  <fieldset style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 6px; text-align: center;">
+    <legend><strong>Timer Slideshow</strong></legend>
+    <div style="display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;">
+      <input type="text" id="timerTags" placeholder="Filter tags (e.g. nature, forest)" style="width: 40%; padding: 6px;">
+      <label for="timerInput">Interval (sec):</label>
+      <input type="number" id="timerInput" value="10" min="1" style="width: 60px; padding: 6px;">
+      <button onclick="startTimer()" style="padding: 6px 12px; cursor: pointer;">Start</button>
+      <button onclick="stopTimer()" style="padding: 6px 12px; cursor: pointer;">Stop</button>
+      <span id="timerStatus" style="font-weight: bold; color: green;"></span>
+    </div>
+
+    <div id="timerViewerContainer">
+      <p id="timerPlaceholder">Slideshow is currently stopped.</p>
+      <img id="timerImage" src="" alt="Slideshow Reference" style="max-width: 100%; max-height: 500px; display: none; margin: 0 auto; border-radius: 4px;">
+      <p id="timerImageTags" style="font-weight: bold; margin-top: 10px;"></p>
+      <button id="deleteTimerBtn" style="display: none; padding: 6px 16px; cursor: pointer;" onclick="deleteTimerPicture()">Delete This Picture</button>
+    </div>
+  </fieldset>
+
+  <!-- GALLERY MODE -->
+  <fieldset style="margin-bottom: 20px; padding: 15px; background: white; border-radius: 6px; text-align: center;">
+    <legend><strong>Gallery View (Browse All)</strong></legend>
+    <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
+      <input type="text" id="galleryTags" placeholder="Filter tags (e.g. nature, forest)" style="width: 60%; padding: 6px;">
+      <button onclick="loadGallery()" style="padding: 6px 16px; cursor: pointer;">Show Matching Pictures</button>
+    </div>
+
+    <div id="galleryViewer" style="display: none;">
+      <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 15px;">
+        <button onclick="prevGalleryImage()" style="padding: 6px 12px; cursor: pointer;">&larr; Previous</button>
+        <span id="galleryCounter" style="font-weight: bold;">0 / 0</span>
+        <button onclick="nextGalleryImage()" style="padding: 6px 12px; cursor: pointer;">Next &rarr;</button>
+      </div>
+      <div>
+        <img id="galleryImage" src="" alt="Gallery Reference" style="max-width: 100%; max-height: 500px; border-radius: 4px;">
+        <p id="galleryImageTags" style="font-weight: bold;"></p>
+        <button id="deleteGalleryBtn" style="padding: 6px 16px; cursor: pointer;" onclick="deleteGalleryPicture()">Delete From Gallery</button>
+      </div>
+    </div>
+  </fieldset>
+
+  <script>
+
+    async function uploadPicture() {
+      const fileInput = document.getElementById("fileInput");
+      const tagInput = document.getElementById("tagInput");
+      const file = fileInput.files[0];
+
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("tags", tagInput.value);
+
+      const response = await fetch("/api/upload", { method: "POST", body: formData });
+
+      if (response.ok) {
+        fileInput.value = "";
+        tagInput.value = "";
+      }
+    }
+
+    let randomHistory = [];
+
+    async function getRandomPicture() {
+      const tags = document.getElementById("randomTags").value;
+      let url = `/api/pictures/random?tags=${encodeURIComponent(tags)}`;
+      
+      if (randomHistory.length > 0) {
+        url += `&exclude_ids=${randomHistory.join(",")}`;
+      }
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        alert("No pictures found matching ALL specified tags.");
+        return;
+      }
+
+      const picture = await response.json();
+      
+      randomHistory.unshift(picture.id);
+      if (randomHistory.length > 2) {
+        randomHistory.pop();
+      }
+
+      document.getElementById("randomPlaceholder").style.display = "none";
+      const imgEl = document.getElementById("randomImage");
+      imgEl.src = `/uploads/${picture.filename}`;
+      imgEl.style.display = "block";
+      document.getElementById("deleteRandomBtn").style.display = "inline-block";
+      document.getElementById("randomImageTags").innerText = "Tags: " + (picture.tags.join(", ") || "None");
+    }
+
+    async function deleteRandomPicture() {
+      const currentId = randomHistory[0];
+      if (!currentId) return;
+
+      if (confirm("Delete this picture?")) {
+        const response = await fetch(`/api/pictures/${currentId}`, { method: "DELETE" });
+        if (response.ok) {
+          document.getElementById("randomImage").style.display = "none";
+          document.getElementById("deleteRandomBtn").style.display = "none";
+          document.getElementById("randomImageTags").innerText = "";
+          document.getElementById("randomPlaceholder").style.display = "block";
+          randomHistory = [];
+        }
+      }
+    }
+
+    let timerInterval = null;
+    let timerHistory = [];
+    let countdownValue = 0;
+    let totalInterval = 10;
+
+    async function loadTimerPicture() {
+      const tags = document.getElementById("timerTags").value;
+      let url = `/api/pictures/random?tags=${encodeURIComponent(tags)}`;
+
+      if (timerHistory.length > 0) {
+        url += `&exclude_ids=${timerHistory.join(",")}`;
+      }
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        stopTimer();
+        alert("No pictures found matching ALL specified tags.");
+        return;
+      }
+
+      const picture = await response.json();
+      
+      timerHistory.unshift(picture.id);
+      if (timerHistory.length > 2) {
+        timerHistory.pop();
+      }
+
+      document.getElementById("timerPlaceholder").style.display = "none";
+      const imgEl = document.getElementById("timerImage");
+      imgEl.src = `/uploads/${picture.filename}`;
+      imgEl.style.display = "block";
+      document.getElementById("deleteTimerBtn").style.display = "inline-block";
+      document.getElementById("timerImageTags").innerText = "Tags: " + (picture.tags.join(", ") || "None");
+    }
+
+    function startTimer() {
+      const seconds = parseInt(document.getElementById("timerInput").value);
+      if (isNaN(seconds) || seconds <= 0) return alert("Enter valid seconds.");
+
+      stopTimer();
+      totalInterval = seconds;
+      countdownValue = totalInterval;
+
+      loadTimerPicture();
+      updateTimerDisplay();
+
+      timerInterval = setInterval(() => {
+        countdownValue--;
+        if (countdownValue <= 0) {
+          loadTimerPicture();
+          countdownValue = totalInterval;
+        }
+        updateTimerDisplay();
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      document.getElementById("timerStatus").innerText = `Running (${countdownValue}s remaining)`;
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+        document.getElementById("timerStatus").innerText = "Stopped";
+      }
+    }
+
+    async function deleteTimerPicture() {
+      const currentId = timerHistory[0];
+      if (!currentId) return;
+
+      if (confirm("Delete this picture?")) {
+        const response = await fetch(`/api/pictures/${currentId}`, { method: "DELETE" });
+        if (response.ok) {
+          timerHistory = [];
+          countdownValue = totalInterval;
+          loadTimerPicture();
+        }
+      }
+    }
+
+    let galleryImages = [];
+    let galleryIndex = 0;
+
+    async function loadGallery() {
+      const tags = document.getElementById("galleryTags").value;
+      const response = await fetch(`/api/pictures?tags=${encodeURIComponent(tags)}`);
+      galleryImages = await response.json();
+
+      if (galleryImages.length === 0) {
+        alert("No images found matching ALL specified tags.");
+        document.getElementById("galleryViewer").style.display = "none";
+        return;
+      }
+
+      galleryIndex = 0;
+      document.getElementById("galleryViewer").style.display = "block";
+      updateGalleryDisplay();
+    }
+
+    function updateGalleryDisplay() {
+      if (galleryImages.length === 0) {
+        document.getElementById("galleryViewer").style.display = "none";
+        return;
+      }
+
+      const current = galleryImages[galleryIndex];
+      document.getElementById("galleryImage").src = `/uploads/${current.filename}`;
+      document.getElementById("galleryImageTags").innerText = "Tags: " + (current.tags.join(", ") || "None");
+      document.getElementById("galleryCounter").innerText = `${galleryIndex + 1} / ${galleryImages.length}`;
+    }
+
+    function prevGalleryImage() {
+      if (galleryImages.length === 0) return;
+      galleryIndex = (galleryIndex - 1 + galleryImages.length) % galleryImages.length;
+      updateGalleryDisplay();
+    }
+
+    function nextGalleryImage() {
+      if (galleryImages.length === 0) return;
+      galleryIndex = (galleryIndex + 1) % galleryImages.length;
+      updateGalleryDisplay();
+    }
+
+    async function deleteGalleryPicture() {
+      if (galleryImages.length === 0) return;
+
+      const current = galleryImages[galleryIndex];
+      if (confirm("Delete this picture from gallery?")) {
+        const response = await fetch(`/api/pictures/${current.id}`, { method: "DELETE" });
+        if (response.ok) {
+          galleryImages.splice(galleryIndex, 1);
+          if (galleryIndex >= galleryImages.length) {
+            galleryIndex = galleryImages.length - 1;
+          }
+          updateGalleryDisplay();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
